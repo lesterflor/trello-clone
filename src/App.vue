@@ -1,18 +1,8 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
-import Draggable from 'vuedraggable'
-
-interface ICard {
-  id: number
-  title: string
-  description: string
-}
-
-interface IList {
-  id: number
-  title: string
-  cards: ICard[]
-}
+import { computed, reactive, ref } from 'vue';
+import Draggable from 'vuedraggable';
+import ModalDialog from './components/ModalDialog.vue';
+import { type ICard, type IList } from './types';
 
 const lists = reactive<IList[]>([
   {
@@ -36,7 +26,43 @@ const lists = reactive<IList[]>([
     title: 'Done',
     cards: [{ id: 5, title: 'Task 5', description: 'Description for Task 5' }],
   },
-])
+]);
+const isModalOpen = ref(false);
+const editingCard = ref<ICard | null>(null);
+const editingListIndex = ref<number | null>(null);
+const modalMode = computed(() => (editingCard.value === null ? 'add' : 'edit'));
+
+const openModal = (listIndex: number, card?: ICard) => {
+  editingListIndex.value = listIndex;
+  editingCard.value = card === undefined ? null : card;
+  isModalOpen.value = true;
+};
+
+const saveCard = (card: ICard) => {
+  if (editingListIndex.value === null) {
+    return;
+  }
+  if (modalMode.value === 'add') {
+    // Adding
+    const newId = Math.max(...lists.flatMap((list) => list.cards.map((c) => c.id)));
+    lists[editingListIndex.value].cards.push({ ...card, id: newId });
+  } else {
+    // Modify
+    const cardIndex = lists[editingListIndex.value].cards.findIndex(
+      (cardOnList) => cardOnList.id === card.id,
+    );
+    if (cardIndex !== -1) {
+      lists[editingListIndex.value].cards[cardIndex] = card;
+    }
+  }
+  closeModal();
+};
+
+const closeModal = () => {
+  isModalOpen.value = false;
+  editingListIndex.value = null;
+  editingCard.value = null;
+};
 </script>
 
 <template>
@@ -44,14 +70,17 @@ const lists = reactive<IList[]>([
     <div class="flex gap-5 py-5 overflow-x-auto">
       <div
         class="bg-gray-100 p-3 rounded-lg min-w-[250px] flex flex-col"
-        v-for="list in lists"
+        v-for="(list, listIndex) in lists"
         :key="list.id"
       >
         <h2 class="font-medium mb-2">{{ list.title }}</h2>
 
-        <Draggable :list="list.cards" group="cards">
+        <Draggable :list="list.cards" group="cards" item-key="id">
           <template #item="{ element }">
-            <div class="bg-white p-2 my-2 rounded shadow cursor-pointer">
+            <div
+              @click="openModal(listIndex, element)"
+              class="bg-white p-2 my-2 rounded shadow cursor-pointer"
+            >
               <span class="text-sm font-medium">{{ element.title }}</span>
               <p class="text-xs text-gray-400">
                 {{ element.description }}
@@ -62,10 +91,19 @@ const lists = reactive<IList[]>([
 
         <button
           class="w-full bg-transparent rounded hover:bg-white text-gray-500 p-2 text-left mt-2 text-sm font-medium"
+          @click="openModal(listIndex)"
         >
           + Add Card
         </button>
       </div>
     </div>
+
+    <ModalDialog
+      :is-open="isModalOpen"
+      :card="editingCard"
+      :mode="modalMode"
+      @close="closeModal"
+      @save="saveCard"
+    />
   </main>
 </template>
